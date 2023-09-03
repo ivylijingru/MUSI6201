@@ -101,7 +101,7 @@ plt.stem(timeInSec, f0_vec)
 plt.xlabel('Block Start Time (sec)')
 plt.ylabel('Fundamental Frequency [Hz]')
 plt.title('Pitch Tracking')
-plt.show(block=False)
+plt.show()
 
 # if __name__ == "__main__":
 #     track_pitch_acf()

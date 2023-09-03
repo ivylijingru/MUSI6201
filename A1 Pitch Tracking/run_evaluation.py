@@ -10,7 +10,7 @@ import os
 
 # load audio and corresponding text data files from directory
 # set absolute path to directory containing all files
-mypath = r'C:\Users\bhard\Dropbox (GaTech)\Georgia Tech\Coursework\Fall 23\MUSI 6201\MUSI6201\A1 Pitch Tracking\developmentSet\trainData' # update as required for your system
+mypath = r'/Users/ananyabhardwaj/Downloads/trainData' # update as required for your system
 
 # set processing variables
 block_size = 1024 # number of samples per block
@@ -70,6 +70,6 @@ def run_evaluation(complete_path_to_data_folder):
         # call cent error function
         cent_error = eval_pitchtrack(f0_vec, text_data[:,1])
         # print cent error
-        print('Cent error for file ' + str(i) + ' is ' + str(cent_error) + ' cents.')
+        print('Cent error for file ' + str(i+1) + ' is ' + str(cent_error) + ' cents.')
 
 run_evaluation(mypath)
