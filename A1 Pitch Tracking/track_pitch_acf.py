@@ -16,12 +16,12 @@ def track_pitch_acf(x,block_size,hop_size,fs):
 
     # call ACF function and get_f0 function in a loop and save output
     for i in range(NumOfBlocks):
+        # bls_normalized = np.dot(xb[i,:],xb[i,:])
+        # if bls_normalized == 0:
+        #     bls_normalized = 1
+
         # calculate ACF for each block
-        bls_normalized = np.dot(xb[i,:],xb[i,:])
-        if bls_normalized == 0:
-            bls_normalized = 1
-        
-        r = comp_acf(xb[i,:],bls_normalized)
+        r = comp_acf(xb[i,:],is_normalized = True) # normaliztion turned on by default
 
         f0_vec[i] = get_f0_from_acf(r, fs)
 
@@ -44,9 +44,14 @@ def block_audio(x,block_size, hop_size, fs):
     return xb[0:j], timeInSec[0:j]
 
 # function to calculate ACF
-def comp_acf(inputVector,bls_normalized):
+def comp_acf(inputVector,is_normalized: bool):
     inputVector = np.array(inputVector) # convert to numpy array
-    bls_normalized = np.array(bls_normalized) # convert to numpy array
+    if is_normalized:
+         bls_normalized = np.dot(inputVector,inputVector)
+         if bls_normalized == 0: # to avoid divide by zero error
+            bls_normalized = 1
+    else:
+        bls_normalized = 1 # setting it to 1 means we don't normalize the ACF
 
     noutput = len(inputVector) # length of output vector - since we only return half the ACF vector
     r = np.zeros((noutput,1)) # ACF output
