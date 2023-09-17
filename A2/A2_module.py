@@ -16,7 +16,7 @@ hop_size = 512 # hop size
 t = np.arange(0,1,1/fs) # time vector
 x = np.sin(2*np.pi*440*t) #+ np.sin(2*np.pi*880*t) + np.sin(2*np.pi*1320*t)  # signal vector
 
-
+#
 # Function 1 - Calculate Spectral Centroid
 # First block an input signal
 xb, timeInSec = block_audio(x,block_size, hop_size, fs)
