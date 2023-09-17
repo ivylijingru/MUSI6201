@@ -42,7 +42,7 @@ def extract_rms(xb):
 
 
 # Create a function for extracting zero_crossings
-def extract_zerocrossingrate(xb,fs):
+def extract_zerocrossingrate(xb):
     # loop over each block and find zero crossing rate by finding negative difference values
     nblocks, b_size = np.shape(xb) # get size of input vector
     zcr = np.zeros(nblocks) # spectral centroid
@@ -67,6 +67,33 @@ def extract_spectral_crest(xb, fs):
         #X_fft[i,:] = hw*X_fft[i,:]
         S_crest[i] = (np.max(X_fft[i,:]))/np.sum(X_fft[i,:]) # spectral crest
     return S_crest
+
+# create a function to calculate spectral flux
+def extract_spectral_flux(xb, fs):
+    # calculate fft block by block, keeping only the positive frequencies and normalizing by the number of samples
+    # create a frequency vector
+    nblocks, b_size = np.shape(xb)
+    f = np.arange(0,fs/2 + fs/b_size,fs/b_size)
+    flen = len(f)
+    hw = np.hanning(flen) # hanning window
+
+    X_fft = np.zeros((nblocks, flen)) # FFT vector
+    S_flux = np.zeros(nblocks) # spectral centroid
+    for i in range(nblocks-1):
+        X_fft[i,:] = (np.abs(np.fft.fft(xb[i,:]))[0:flen])/(0.5*b_size)
+        X_fft[i+1,:] = (np.abs(np.fft.fft(xb[i+1,:]))[0:flen])/(0.5*b_size)
+        # window fft
+        #X_fft[i,:] = hw*X_fft[i,:]
+        S_flux[i] = np.sqrt(np.sum(np.square(X_fft[i+1,:] - X_fft[i,:])))/ (b_size+1) # spectral flux
+    return S_flux
+
+
+
+
+
+
+
+
                                                   ## Plotting and Testing
 
 # create a sample signal
@@ -84,7 +111,14 @@ S_cent = extract_spectral_centroid(xb, fs)
 # calculate rms_dB
 rms_dB = extract_rms(xb)
 
+# calculate spectral crest
+S_crest = extract_spectral_crest(xb, fs)
 
+# calculate zero crossings
+zcr = extract_zerocrossingrate(xb)
+
+# calculate spectral flux
+S_flux = extract_spectral_flux(xb, fs)
 
 # plot sample spectrum
 # plt.figure()
@@ -120,4 +154,28 @@ plt.plot(timeInSec, rms_dB)
 plt.xlabel('Time (sec)')
 plt.ylabel('Magnitude')
 plt.title('RMS [dB]')
+plt.show(block=False)
+
+# plot zerocrossings
+plt.figure()
+plt.plot(timeInSec, zcr)
+plt.xlabel('Time (sec)')
+plt.ylabel('Magnitude')
+plt.title('Zero Crossings')
+plt.show(block=False)
+
+# plot spectral crest
+plt.figure()
+plt.plot(timeInSec, S_crest)
+plt.xlabel('Time (sec)')
+plt.ylabel('Magnitude')
+plt.title('Spectral Crest')
+plt.show(block=False)
+
+# plot spectral flux
+plt.figure()
+plt.plot(timeInSec, S_flux)
+plt.xlabel('Time (sec)')
+plt.ylabel('Magnitude')
+plt.title('Spectral Flux')
 plt.show()
