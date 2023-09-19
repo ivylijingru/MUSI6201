@@ -6,12 +6,17 @@ import matplotlib.pyplot as plt
 import scipy.signal as signal
 # import helper function module from A1
 from A1_helper_module import *
+import os
 
 # Inputs:
 fs = 44.1e3 # sampling rate
 block_size = 1024 # block size
 hop_size = 512 # hop size
 
+# load audio and corresponding text data files from directory
+# set absolute path to directory containing all files
+musicpath = r'/Users/ananyabhardwaj/Downloads/music_speech data/music_wav' # update as required for your system
+speechpath = r'/Users/ananyabhardwaj/Downloads/music_speech data/speech_wav' # update as required for your system
 
 # create spectral centroid function - takes blocked audio and sampling rate as input
 def extract_spectral_centroid(xb, fs):
@@ -20,14 +25,12 @@ def extract_spectral_centroid(xb, fs):
     nblocks, b_size = np.shape(xb)
     f = np.arange(0,fs/2 + fs/b_size,fs/b_size)
     flen = len(f)
-    hw = np.hanning(flen) # hanning window
+    hw = np.hanning(b_size) # hanning window
 
     X_fft = np.zeros((nblocks, flen)) # FFT vector
     S_cent = np.zeros(nblocks) # spectral centroid
     for i in range(nblocks):
-        X_fft[i,:] = (np.abs(np.fft.fft(xb[i,:]))[0:flen])/(0.5*b_size)
-        # window fft
-        #X_fft[i,:] = hw*X_fft[i,:]
+        X_fft[i,:] = (np.abs(np.fft.fft(hw*xb[i,:]))[0:flen])/(0.5*b_size)
         S_cent[i] = (np.dot(f,X_fft[i,:]))/np.sum(X_fft[i,:]) # spectral centroid
     return S_cent
 
@@ -57,14 +60,12 @@ def extract_spectral_crest(xb, fs):
     nblocks, b_size = np.shape(xb)
     f = np.arange(0,fs/2 + fs/b_size,fs/b_size)
     flen = len(f)
-    hw = np.hanning(flen) # hanning window
+    hw = np.hanning(b_size) # hanning window
 
     X_fft = np.zeros((nblocks, flen)) # FFT vector
     S_crest = np.zeros(nblocks) # spectral centroid
     for i in range(nblocks):
-        X_fft[i,:] = (np.abs(np.fft.fft(xb[i,:]))[0:flen])/(0.5*b_size)
-        # window fft
-        #X_fft[i,:] = hw*X_fft[i,:]
+        X_fft[i,:] = (np.abs(np.fft.fft(hw*xb[i,:]))[0:flen])/(0.5*b_size)
         S_crest[i] = (np.max(X_fft[i,:]))/np.sum(X_fft[i,:]) # spectral crest
     return S_crest
 
@@ -75,15 +76,13 @@ def extract_spectral_flux(xb, fs):
     nblocks, b_size = np.shape(xb)
     f = np.arange(0,fs/2 + fs/b_size,fs/b_size)
     flen = len(f)
-    hw = np.hanning(flen) # hanning window
+    hw = np.hanning(b_size) # hanning window
 
     X_fft = np.zeros((nblocks, flen)) # FFT vector
     S_flux = np.zeros(nblocks) # spectral centroid
     for i in range(nblocks-1):
-        X_fft[i,:] = (np.abs(np.fft.fft(xb[i,:]))[0:flen])/(0.5*b_size)
-        X_fft[i+1,:] = (np.abs(np.fft.fft(xb[i+1,:]))[0:flen])/(0.5*b_size)
-        # window fft
-        #X_fft[i,:] = hw*X_fft[i,:]
+        X_fft[i,:] = (np.abs(np.fft.fft(hw*xb[i,:]))[0:flen])/(0.5*b_size)
+        X_fft[i+1,:] = (np.abs(np.fft.fft(hw*xb[i+1,:]))[0:flen])/(0.5*b_size)
         S_flux[i] = np.sqrt(np.sum(np.square(X_fft[i+1,:] - X_fft[i,:])))/ (b_size+1) # spectral flux
     return S_flux
 
@@ -98,27 +97,74 @@ def extract_spectral_flux(xb, fs):
 
 # create a sample signal
 t = np.arange(0,1,1/fs) # time vector
-x = np.sin(2*np.pi*440*t) #+ np.sin(2*np.pi*880*t) + np.sin(2*np.pi*1320*t)  # signal vector
+x = np.sin(2*np.pi*441*t) #+ np.sin(2*np.pi*880*t) + np.sin(2*np.pi*1320*t)  # signal vector
+# add some filtered white noise to signal vector
+noise = np.random.normal(0,1,len(x))
+b, a = signal.butter(2, 15e3, 'low', fs = fs, analog=False) # to prevent aliasing, filter noise before adding to signal
+noise = signal.filtfilt(b, a, noise)
+#x = x + 0.1*noise
 
 
-# First block an input signal
-xb, timeInSec = block_audio(x,block_size, hop_size, fs)
-NumOfBlocks = len(timeInSec)
+def extract_features(x, block_size, hop_size, fs):
+    # First block an input signal
+    xb, timeInSec = block_audio(x,block_size, hop_size, fs)
+    NumOfBlocks = len(timeInSec)
 
-# calculate spectral centroid
-S_cent = extract_spectral_centroid(xb, fs)
+    # create an empty feature array
+    feature_array = np.zeros((NumOfBlocks, 5))
 
-# calculate rms_dB
-rms_dB = extract_rms(xb)
+    # calculate spectral centroid
+    S_cent = extract_spectral_centroid(xb, fs)
+    feature_array[:,0] = S_cent
 
-# calculate spectral crest
-S_crest = extract_spectral_crest(xb, fs)
+    # calculate rms_dB
+    rms_dB = extract_rms(xb)
+    feature_array[:,1] = rms_dB
 
-# calculate zero crossings
-zcr = extract_zerocrossingrate(xb)
+    # calculate spectral crest
+    S_crest = extract_spectral_crest(xb, fs)
+    feature_array[:,2] = S_crest
 
-# calculate spectral flux
-S_flux = extract_spectral_flux(xb, fs)
+    # calculate zero crossings
+    zcr = extract_zerocrossingrate(xb)
+    feature_array[:,3] = zcr
+
+    # calculate spectral flux
+    S_flux = extract_spectral_flux(xb, fs)
+    feature_array[:,4] = S_flux
+
+    return feature_array, timeInSec
+
+def aggregate_feature_per_file(features):
+    # aggregate features per file by taking the mean and standard deviation of each feature
+    agg_features = np.zeros(10) # initialize empty array
+    # loop over features to calculate mean and standard deviation
+    c = 0
+    for i in range(np.shape(features)[1]):
+        agg_features[c],agg_features[c+1]  =   np.mean(features[:,i]), np.std(features[:,i])
+        c = c+2
+    return agg_features # remove first row of zeros
+
+# loop over all files in the directory and extract features
+# initialize empty array
+features_music = np.zeros((len(os.listdir(musicpath)),10))
+features_speech = np.zeros((len(os.listdir(speechpath)),10))
+
+
+# plot input signal
+plt.figure()
+plt.plot(t,x)
+plt.xlabel('Time (sec)')
+plt.ylabel('Magnitude')
+plt.title('Input Signal')
+plt.show(block=False)
+
+plt.figure()
+plt.plot(t,noise)
+plt.xlabel('Time (sec)')
+plt.ylabel('Magnitude')
+plt.title('Noise')
+plt.show(block=False)
 
 # plot sample spectrum
 # plt.figure()
@@ -139,10 +185,14 @@ S_flux = extract_spectral_flux(xb, fs)
 # plt.title('Spectrogram')
 # plt.show(block=False)
 
+features, timeInSec = extract_features(x, block_size, hop_size, fs)
+features_agg = aggregate_feature_per_file(features)
+
+print(features_agg)
 
 # plot spectral centroid vector
 plt.figure()
-plt.plot(timeInSec, S_cent)
+plt.plot(timeInSec, features[:,0])
 plt.xlabel('Time (sec)')
 plt.ylabel('Magnitude')
 plt.title('Spectral Centroid')
@@ -150,7 +200,7 @@ plt.show(block=False)
 
 # plot RMS Energy
 plt.figure()
-plt.plot(timeInSec, rms_dB)
+plt.plot(timeInSec, features[:,1])
 plt.xlabel('Time (sec)')
 plt.ylabel('Magnitude')
 plt.title('RMS [dB]')
@@ -158,7 +208,7 @@ plt.show(block=False)
 
 # plot zerocrossings
 plt.figure()
-plt.plot(timeInSec, zcr)
+plt.plot(timeInSec, features[:,2])
 plt.xlabel('Time (sec)')
 plt.ylabel('Magnitude')
 plt.title('Zero Crossings')
@@ -166,7 +216,7 @@ plt.show(block=False)
 
 # plot spectral crest
 plt.figure()
-plt.plot(timeInSec, S_crest)
+plt.plot(timeInSec, features[:,3])
 plt.xlabel('Time (sec)')
 plt.ylabel('Magnitude')
 plt.title('Spectral Crest')
@@ -174,7 +224,7 @@ plt.show(block=False)
 
 # plot spectral flux
 plt.figure()
-plt.plot(timeInSec, S_flux)
+plt.plot(timeInSec, features[:,4])
 plt.xlabel('Time (sec)')
 plt.ylabel('Magnitude')
 plt.title('Spectral Flux')
