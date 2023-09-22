@@ -166,11 +166,98 @@ def get_feature_data(path, block_size, hop_size):
         #  extract features from one file
         feature_array, timeInSec = extract_features(x, block_size, hop_size, fs)
         # get means and std of features and save to aggrgate feature vector
-        feature_data[:,i] = aggregate_feature_per_file(features)
+        feature_data[:,i] = aggregate_feature_per_file(feature_array)
 
     return feature_data
 
-        
+                                        ## Part B
+
+# create a z-score normalization function - normalizes each feature to zero mean and 1 std
+def normalize_zscore(features):
+    features_zsc = np.zeros(shape=np.shape(features))
+    for i in range(np.shape(features)[1]):
+        features_zsc[:,i] = (features[:,i] - np.mean(features[:,i]))/np.std(features[:,i])
+    
+    return features_zsc
+
+
+                                        ## Part C
+
+def visualize_features(path_to_musicspeech):
+    block_size = 1024 # block size
+    hop_size = 256 # hop size
+    musicpath = path_to_musicspeech + 'music_wav' # update as required for your system
+    speechpath = path_to_musicspeech + 'speech_wav' # update as required for your system
+
+    feature_data_music = get_feature_data(musicpath, block_size, hop_size)
+    feature_data_speech = get_feature_data(speechpath, block_size, hop_size)
+
+    N_music = np.shape(feature_data_music)[1]
+    N_speech = np.shape(feature_data_speech)[1]
+
+    # normalize features across both music and speech
+    # combine music and speech feature data
+    feature_data = np.concatenate((feature_data_music, feature_data_speech), axis=1)
+    # normalize features
+    feature_data_zsc = normalize_zscore(feature_data)
+    # separate music and speech features
+    feature_data_music_zsc = feature_data_zsc[:,0:N_music]
+    feature_data_speech_zsc = feature_data_zsc[:,N_music:]
+
+    ## visualize and compare features across music and speech using scatter plots
+    # spectral centroid  vs spectral crest means
+    plt.figure()
+    plt.scatter(feature_data_music_zsc[0,:], feature_data_music_zsc[4,:], c='r', marker='o', label='music')
+    plt.scatter(feature_data_speech_zsc[0,:], feature_data_speech_zsc[4,:], c='b', marker='x', label='speech')
+    plt.xlabel('Spectral Centroid')
+    plt.ylabel('Spectral Crest')
+    plt.title('Spectral Centroid vs Spectral Crest')
+    plt.legend()
+    plt.show(block=False)
+
+    # spectral flux vs zero crossings means
+    plt.figure()
+    plt.scatter(feature_data_music_zsc[8,:], feature_data_music_zsc[6,:], c='r', marker='o', label='music')
+    plt.scatter(feature_data_speech_zsc[8,:], feature_data_speech_zsc[6,:], c='b', marker='x', label='speech')
+    plt.xlabel('Spectral Flux')
+    plt.ylabel('Zero Crossings')
+    plt.title('Spectral Flux vs Zero Crossings')
+    plt.legend()
+    plt.show(block=False)
+
+    # RMS mean vs RMS std
+    plt.figure()
+    plt.scatter(feature_data_music_zsc[2,:], feature_data_music_zsc[3,:], c='r', marker='o', label='music')
+    plt.scatter(feature_data_speech_zsc[3,:], feature_data_speech_zsc[3,:], c='b', marker='x', label='speech')
+    plt.xlabel('RMS mean')
+    plt.ylabel('RMS std')
+    plt.title('RMS mean vs RMS std')
+    plt.legend()
+    plt.show(block=False)
+
+    # Zero crossing std vs spectral crest std
+    plt.figure()
+    plt.scatter(feature_data_music_zsc[7,:], feature_data_music_zsc[5,:], c='r', marker='o', label='music')
+    plt.scatter(feature_data_speech_zsc[7,:], feature_data_speech_zsc[5,:], c='b', marker='x', label='speech')
+    plt.xlabel('Zero Crossing std')
+    plt.ylabel('Spectral Crest std')
+    plt.title('Zero Crossing std vs Spectral Crest std')
+    plt.legend()
+    plt.show(block=False)
+
+    # spectral centroid std vs spectral flux std
+    plt.figure()
+    plt.scatter(feature_data_music_zsc[1,:], feature_data_music_zsc[9,:], c='r', marker='o', label='music')
+    plt.scatter(feature_data_speech_zsc[1,:], feature_data_speech_zsc[9,:], c='b', marker='x', label='speech')
+    plt.xlabel('Spectral Centroid std')
+    plt.ylabel('Spectral Flux std')
+    plt.title('Spectral Centroid std vs Spectral Flux std')
+    plt.legend()
+    plt.show()
+
+    return
+
+
 
 
 # plot input signal
@@ -207,20 +294,9 @@ plt.show(block=False)
 # plt.title('Spectrogram')
 # plt.show(block=False)
 
-features, timeInSec = extract_features(x, block_size, hop_size, fs)
-features_agg = aggregate_feature_per_file(features)
 
-print(features_agg)
-
-# loop over all files in the directory and extract features
-# initialize empty array
-features_music = np.zeros((len(os.listdir(musicpath)),10))
-features_speech = np.zeros((len(os.listdir(speechpath)),10))
-
-
-features_music = get_feature_data(musicpath, block_size, hop_size)
-
-print(np.shape(features_music))
+path_musicspeech = r'/Users/ananyabhardwaj/Downloads/music_speech data/' # update as required for your system                                      
+visualize_features(path_musicspeech)
 
 ## Uncomment below to visualize if needed
 
