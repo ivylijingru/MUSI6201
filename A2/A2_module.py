@@ -7,6 +7,7 @@ import scipy.signal as signal
 # import helper function module from A1
 from A1_helper_module import *
 import os
+import scipy.io.wavfile as wav
 
 # Inputs:
 fs = 44.1e3 # sampling rate
@@ -145,10 +146,31 @@ def aggregate_feature_per_file(features):
         c = c+2
     return agg_features # remove first row of zeros
 
-# loop over all files in the directory and extract features
-# initialize empty array
-features_music = np.zeros((len(os.listdir(musicpath)),10))
-features_speech = np.zeros((len(os.listdir(speechpath)),10))
+
+# create a function that loops over all the files in a given folder path, extracts and saves all the feature values in one vector
+def get_feature_data(path, block_size, hop_size):
+    audio_files = [] # initialize list of audio files
+    
+    for file in os.listdir(path): # iterate over all files in the directory
+        if file.endswith('.wav'): # if the file is an audio file
+            audio_files.append(os.path.join(path, file)) # add the file to the list of audio files
+
+    N = len(audio_files) # length of audio files in given folder
+    feature_data = np.zeros((10, N)) # create an array of zeros of the size of 10 (number of feature values) by N (number of files in the folder)
+    
+    # loop over all audio files and process them to extract features that are aggregated in the feature_data array
+    for i in range(N):
+        print('Processing file ' + str(i+1) + ' of ' + str(len(audio_files)) + '...') # print progress
+        fs, x = wav.read(audio_files[i]) # load audio file
+
+        #  extract features from one file
+        feature_array, timeInSec = extract_features(x, block_size, hop_size, fs)
+        # get means and std of features and save to aggrgate feature vector
+        feature_data[:,i] = aggregate_feature_per_file(features)
+
+    return feature_data
+
+        
 
 
 # plot input signal
@@ -190,42 +212,54 @@ features_agg = aggregate_feature_per_file(features)
 
 print(features_agg)
 
-# plot spectral centroid vector
-plt.figure()
-plt.plot(timeInSec, features[:,0])
-plt.xlabel('Time (sec)')
-plt.ylabel('Magnitude')
-plt.title('Spectral Centroid')
-plt.show(block=False)
+# loop over all files in the directory and extract features
+# initialize empty array
+features_music = np.zeros((len(os.listdir(musicpath)),10))
+features_speech = np.zeros((len(os.listdir(speechpath)),10))
 
-# plot RMS Energy
-plt.figure()
-plt.plot(timeInSec, features[:,1])
-plt.xlabel('Time (sec)')
-plt.ylabel('Magnitude')
-plt.title('RMS [dB]')
-plt.show(block=False)
 
-# plot zerocrossings
-plt.figure()
-plt.plot(timeInSec, features[:,2])
-plt.xlabel('Time (sec)')
-plt.ylabel('Magnitude')
-plt.title('Zero Crossings')
-plt.show(block=False)
+features_music = get_feature_data(musicpath, block_size, hop_size)
 
-# plot spectral crest
-plt.figure()
-plt.plot(timeInSec, features[:,3])
-plt.xlabel('Time (sec)')
-plt.ylabel('Magnitude')
-plt.title('Spectral Crest')
-plt.show(block=False)
+print(np.shape(features_music))
 
-# plot spectral flux
-plt.figure()
-plt.plot(timeInSec, features[:,4])
-plt.xlabel('Time (sec)')
-plt.ylabel('Magnitude')
-plt.title('Spectral Flux')
-plt.show()
+## Uncomment below to visualize if needed
+
+# # plot spectral centroid vector
+# plt.figure()
+# plt.plot(timeInSec, features[:,0])
+# plt.xlabel('Time (sec)')
+# plt.ylabel('Magnitude')
+# plt.title('Spectral Centroid')
+# plt.show(block=False)
+
+# # plot RMS Energy
+# plt.figure()
+# plt.plot(timeInSec, features[:,1])
+# plt.xlabel('Time (sec)')
+# plt.ylabel('Magnitude')
+# plt.title('RMS [dB]')
+# plt.show(block=False)
+
+# # plot zerocrossings
+# plt.figure()
+# plt.plot(timeInSec, features[:,2])
+# plt.xlabel('Time (sec)')
+# plt.ylabel('Magnitude')
+# plt.title('Zero Crossings')
+# plt.show(block=False)
+
+# # plot spectral crest
+# plt.figure()
+# plt.plot(timeInSec, features[:,3])
+# plt.xlabel('Time (sec)')
+# plt.ylabel('Magnitude')
+# plt.title('Spectral Crest')
+# plt.show(block=False)
+
+# # plot spectral flux
+# plt.figure()
+# plt.plot(timeInSec, features[:,4])
+# plt.xlabel('Time (sec)')
+# plt.ylabel('Magnitude')
+# plt.title('Spectral Flux')
+# plt.show()
