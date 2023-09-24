@@ -232,7 +232,7 @@ def visualize_features(path_to_musicspeech):
 
     return
 
-## Run the function and create plots
+## Run the function and create plots - only if this file is run and not imported as module  
 if __name__ == '__main__':
     path_musicspeech = r'/Users/ananyabhardwaj/Downloads/music_speech data/' # update as required for your system                                      
     visualize_features(path_musicspeech)
