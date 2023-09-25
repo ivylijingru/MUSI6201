@@ -2,7 +2,7 @@
 
 Assignments are split into separate folders
 
-Folder A1: Assignment 1
+# Folder A1: Assignment 1
 This assignment implements a Pitch Tracker using Autocorrelation Function
 
 # Assignment 2 : Folder A2
