@@ -41,7 +41,8 @@ def extract_rms(xb):
     nblocks, b_size = np.shape(xb) # get size of input blocked signal
     rms_dB = np.zeros(nblocks) # spectral centroid
     for i in range(nblocks):
-        rms_dB[i] = np.maximum(20*np.log10(np.sqrt(np.sum(np.square(xb[i,:])/np.size(xb[i,:])))), -100)
+        rms_of_block = np.sqrt(np.sum(np.square(xb[i,:])/np.size(xb[i,:])))
+        rms_dB[i] = np.maximum(20*np.log10(rms_of_block / np.power(2, 15)), -100) # Dividing by 2^15 (for 16-bit depth) to get dbFS
     return rms_dB
         
 # Create a function for extracting zero_crossings
@@ -234,6 +235,6 @@ def visualize_features(path_to_musicspeech):
 
 ## Run the function and create plots - only if this file is run and not imported as module  
 if __name__ == '__main__':
-    path_musicspeech = r'/Users/ananyabhardwaj/Downloads/music_speech data/' # update as required for your system                                      
+    path_musicspeech = r'/Users/dhruvpargai/Downloads/music_speech data/' # update as required for your system                                      
     visualize_features(path_musicspeech)
 
