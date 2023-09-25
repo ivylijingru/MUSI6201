@@ -7,3 +7,5 @@ This assignment implements a Pitch Tracker using Autocorrelation Function
 
 # Assignment 2 : Folder A2
 The a2solution.py includes all the requsite code and generates the plots, it imports a function A1_helper_module that includes the blocking function from assignment 1
+
+Also included is the PDF with plots - Assignment2.pdf
