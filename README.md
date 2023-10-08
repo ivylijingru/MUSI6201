@@ -1,4 +1,11 @@
-# MUSI6201
-Assignments and Project Code for Audio Content and Analysis, MUSI 6201 at Georgia Tech - Fall 2023
+# This repo includes code for all assignments of MUSI6201 - Fall 2023
 
-This repository contains code for all assignments and projects for evaluation, as well as some additional functions, personal projects and code that is to be ignored by the class instructors and TAs
+Assignments are split into separate folders
+
+# Folder A1: Assignment 1
+This assignment implements a Pitch Tracker using Autocorrelation Function
+
+# Assignment 2 : Folder A2
+The a2solution.py includes all the requsite code and generates the plots, it imports a function A1_helper_module that includes the blocking function from assignment 1
+
+Also included is the PDF with plots - Assignment2.pdf
