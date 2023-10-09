@@ -13,7 +13,7 @@ path = os.getcwd()
 sys.path.append(path + '/A1 Pitch Tracking')
 sys.path.append(path + '/A2')
 from A1_helper_module import *
-
+from a2solution import *
 
 ## Part A
 # A.1 - Create a spectrogram function compute_spectrogram(xb, fs) which computes the magbitude spectrogram of a given block of audio data xb sampled at a rate fs.
@@ -52,3 +52,86 @@ def track_pitch_fftmax(x, blockSize, hopSize, fs):
     # Zero padding can be used to improve the frequency resolution, but it will not improve the accuracy of the pitch tracker.
 
 # Part B
+# Harmonic Product Spectrum (HPS) Pitch Tracker - multiply each spectrogram block with its "harmonics" an order number of times and extract peak
+# B.1 - get f0 from Hps function
+def get_f0_from_Hps(X, fs, order):
+    P = X
+    blockSize, NumOfBlocks  = np.shape(X)
+
+    # loop over all the blocks and 
+    for i in range(np.shape(X)[-1]):
+        for j in range(order-1):
+            X1 = X[np.arange(1,blockSize,j+2),i] 
+            P[:,i] = P[:,i]*np.append(X1, np.zeros(len(X1)))
+    
+    # calculate the peak value for each block and store it into a vector
+    maxIndex = np.argmax(P, axis=0)
+    freq = np.arange(0, fs/2, fs/blockSize)
+    f0 = freq[maxIndex]
+    return f0
+
+# B.2 track pitch with HPS function
+def track_pitch_hps(x, blockSize, hopSize, fs):
+    # variables
+    order = 4
+    # block input audio vector x
+    xb, timeInSec = block_audio(x, blockSize, hopSize, fs)
+    # calculate magnitude spectrogram
+    spect, freq = create_spectrogram(xb, fs)
+    # estimate fundamental frequency using the HPS method
+    f0 = get_f0_from_Hps(spect, fs, order)
+    return f0
+
+# Part C - Voicing Detection
+# create a voicing mask function
+#C.1 and C.2
+rmsDb = extract_rms(xb)
+def create_voicing_mask(rmsDb, thresholdDb):
+    # loop over the vector block by block and apply mask based on threshold
+    mask = np.zeros(np.shape(rmsDb))
+    for i in range(len(rmsDb)):
+        if rmsDb[i]>thresholdDb:
+            mask[i] = 1
+    
+# C.3 - create a function that applies a voicing mask to the extracted f0 vector
+def apply_voicing_mask(f0, mask):
+    f0 = f0*mask
+    return f0
+
+# Part D - Evaluation
+# calculate how many false positive values (estimated fundamental frequencies where the mask is set to 0)
+def eval_voiced_fp(estimation, annotation):
+    # calculate zero values in annotation
+    N = len(annotation)
+    zero_inds = np.where(annotation==0)
+    fps = np.count_nonzero(estimation[zero_inds])
+    pfp = fps/len(zero_inds)
+    return pfp
+
+# calculate how many false negatives values (estimated fundamental frequencies where the mask is nonzero but estimate is 0)
+def eval_voiced_fn(estimation, annotation):
+    # calculate zero values in annotation
+    N = len(annotation)
+    nonzero_inds = np.where(annotation!=0)
+    fns = np.size(estimation[nonzero_inds]==0)
+    pfn = fns/len(nonzero_inds)
+    return pfn
+
+# modified eval_pitchtrack function from Assignment 1
+import convert_freq2midi
+def eval_pitchtrack_v2(estimate_in_hz, groundtruth_in_hz):
+    estimate_in_hz = np.array(estimate_in_hz) # make sure inputs are numpy arrays
+    groundtruth_in_hz = np.array(groundtruth_in_hz) # make sure inputs are numpy arrays
+    estimate_pitch_midi = convert_freq2midi(estimate_in_hz) # convert estimate to MIDI
+    groundtruth_pitch_midi = convert_freq2midi(groundtruth_in_hz) # convert ground truth to MIDI
+
+
+    p_err = estimate_pitch_midi - groundtruth_pitch_midi  # error in pitch  - MIDI
+    err_cent = 100*p_err
+    errCentRms = np.sqrt(np.sum(np.square(err_cent))/np.size(err_cent))
+
+    pfp = eval_voiced_fp(estimate_in_hz, groundtruth_in_hz)
+    pfn = eval_voiced_fn(estimate_in_hz, groundtruth_in_hz)
+
+    return errCentRms, pfp, pfn
+
