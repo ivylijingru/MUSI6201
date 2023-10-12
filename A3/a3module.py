@@ -23,17 +23,22 @@ def create_spectrogram(xb, fs):
     # fs: sampling rate
     # returns: 2D array of spectrogram data
     # create a hann window of the same length as the block of audio data
-    hann_window = np.hanning(len(xb))
+    NumOfBlocks, blockSize = np.shape(xb)
+    hann_window = np.hanning(np.shape(xb)[1])
+    hann_window = np.resize(hann_window, (np.shape(xb)))
     # multiply the window by the block of audio data
     xb = xb * hann_window
     # compute the fft of the block of audio data 
     fft = np.fft.fft(xb)
     # compute the magnitude of the fft
-    magnitude = np.abs(fft)
-    # compute the spectrogram from the fft, rejecting the second half of the fft
-    X = magnitude[:len(magnitude)//2]
+    magnitude = np.abs(fft)*(2/blockSize)
     # create a frequency vector
-    fInHz = np.arange(0, fs/2, fs/len(X))
+    fInHz = np.arange(0, fs/2+1, fs/blockSize)
+    # compute the spectrogram from the fft, rejecting the second half of the fft
+    #magnitude = np.transpose(magnitude)
+    Y = magnitude[:,0:blockSize//2+1]
+
+    X = np.transpose(Y)
     return X, fInHz
 
 #A.2 - create a pitch tracker that estimates the pitch from the spectrogram by finding the blockwise peak of the spectrogram and returning the corresponding frequency
@@ -62,7 +67,7 @@ def get_f0_from_Hps(X, fs, order):
     for i in range(np.shape(X)[-1]):
         for j in range(order-1):
             X1 = X[np.arange(1,blockSize,j+2),i] 
-            P[:,i] = P[:,i]*np.append(X1, np.zeros(len(X1)))
+            P[:,i] = P[:,i]*np.append(X1, np.zeros(len(P)-len(X1)))
     
     # calculate the peak value for each block and store it into a vector
     maxIndex = np.argmax(P, axis=0)
@@ -85,7 +90,8 @@ def track_pitch_hps(x, blockSize, hopSize, fs):
 # Part C - Voicing Detection
 # create a voicing mask function
 #C.1 and C.2
-rmsDb = extract_rms(xb)
+#xb = block_audio(x)
+#rmsDb = extract_rms(xb)
 def create_voicing_mask(rmsDb, thresholdDb):
     # loop over the vector block by block and apply mask based on threshold
     mask = np.zeros(np.shape(rmsDb))
@@ -135,3 +141,55 @@ def eval_pitchtrack_v2(estimate_in_hz, groundtruth_in_hz):
 
     return errCentRms, pfp, pfn
 
+## Part E - Evaluation
+# E.1
+def executeassign3():
+    #create test signal
+    fs = 44.1e3
+    t1 = np.arange(0,1,1/fs)
+    t2 = np.arange(1,2,1/fs)
+    t = np.append(t1, t2)
+    f1 = 441
+    f2 = 882
+    x = np.append(np.sin(2*np.pi*f1*t1), np.sin(2*np.pi*f2*t2))
+    # plot test signal
+    plt.plot(t,x)
+    plt.xlabel('Time [s]')
+    plt.ylabel('Amplitude (raw)')
+    plt.title('Test Signal')
+    plt.show(block=False)
+
+    blockSize = 1024
+    hopSize = 512
+    f0_fft = track_pitch_fftmax(x, blockSize, hopSize, fs)
+    f0_hps = track_pitch_hps(x, blockSize, hopSize, fs)
+    xb, timeInSec = block_audio(x, blockSize, hopSize, fs)
+
+    # plot returns
+    plt.figure()
+    plt.plot(f0_fft)
+    plt.plot(f0_hps)
+    plt.xlabel('Time [s]')
+    plt.ylabel('Amplitude (raw)')
+    plt.title('Estimated Pitch')
+    plt.legend('FFT','HPS')
+    plt.show()
+
+    # calculate absolute error per block
+    annotation = np.append(np.ones(np.ceil(len(timeInSec)/2).astype(int))*f1, np.ones(np.floor(len(timeInSec)/2).astype(int))*f2)
+    err_fft = np.abs(f0_fft - annotation)
+    err_hps = np.abs(f0_hps - annotation)
+
+    # plot errors
+    plt.figure()
+    plt.plot(err_fft)
+    plt.plot(err_hps)
+    plt.xlabel('Time [s]')
+    plt.ylabel('Amplitude (raw)')
+    plt.title('Error')
+    plt.legend('FFT','HPS')
+    plt.show()
+
+
+if __name__ == '__main__':
+    executeassign3()
