@@ -2,16 +2,23 @@
 
 # import dependencies
 import numpy as np
-import scipy as sp
 from scipy.io import wavfile as wav
 import matplotlib.pyplot as plt
 import os
 
-# add path to A1 and A2 modules
-import sys
-
-from a1solution import convert_freq2midi
+from a1solution import convert_freq2midi, track_pitch_acfmod
 from a2solution import block_audio
+
+
+def extract_rms(xb):
+    nblocks, b_size = np.shape(xb)  # get size of input blocked signal
+    rms_dB = np.zeros(nblocks)  # spectral centroid
+    for i in range(nblocks):
+        rms_of_block = np.sqrt(np.sum(np.square(xb[i, :]) / np.size(xb[i, :])))
+        rms_dB[i] = np.maximum(
+            20 * np.log10(rms_of_block / np.power(2, 15)), -100
+        )  # Dividing by 2^15 (for 16-bit depth) to get dbFS
+    return rms_dB
 
 
 ## Part A
@@ -23,7 +30,7 @@ def create_spectrogram(xb, fs):
     # returns: 2D array of spectrogram data
     # create a hann window of the same length as the block of audio data
     NumOfBlocks, blockSize = np.shape(xb)
-    hann_window = np.hanning(np.shape(xb)[1])
+    hann_window = np.hanning(np.shape(xb)[1])  # np.hanning(np.shape(xb)[1])
     hann_window = np.resize(hann_window, (np.shape(xb)))
     # multiply the window by the block of audio data
     xb = xb * hann_window
@@ -32,7 +39,7 @@ def create_spectrogram(xb, fs):
     # compute the magnitude of the fft
     magnitude = np.abs(fft) * (2 / blockSize)
     # create a frequency vector
-    fInHz = np.arange(0, fs / 2 + 1, fs / blockSize)
+    fInHz = np.arange(0, fs / 2 + 1, fs / (2 * blockSize))
     # compute the spectrogram from the fft, rejecting the second half of the fft
     # magnitude = np.transpose(magnitude)
     Y = magnitude[:, 0 : blockSize // 2 + 1]
@@ -50,7 +57,7 @@ def track_pitch_fftmax(x, blockSize, hopSize, fs):
     # find blockwise peak of spectrogram
     maxIndex = np.argmax(spect, axis=0)
     # return corresponding frequency vector
-    return freq[maxIndex]
+    return freq[maxIndex], timeInSec
 
 
 # A.3 : Question: Frequency resolution of blocked audio pitch tracker and how it can be improved
@@ -62,18 +69,21 @@ def track_pitch_fftmax(x, blockSize, hopSize, fs):
 # Harmonic Product Spectrum (HPS) Pitch Tracker - multiply each spectrogram block with its "harmonics" an order number of times and extract peak
 # B.1 - get f0 from Hps function
 def get_f0_from_Hps(X, fs, order):
-    P = X
+    P = X.copy()
     blockSize, NumOfBlocks = np.shape(X)
 
+    out_dim = int(np.shape(X)[0] / order)
+    P = P[:out_dim, :]
     # loop over all the blocks and
     for i in range(np.shape(X)[-1]):
         for j in range(order - 1):
             X1 = X[np.arange(1, blockSize, j + 2), i]
-            P[:, i] = P[:, i] * np.append(X1, np.zeros(len(P) - len(X1)))
+            X1 = X1[:out_dim]
 
-    # calculate the peak value for each block and store it into a vector
+            P[:, i] = P[:, i] * X1
+
     maxIndex = np.argmax(P, axis=0)
-    freq = np.arange(0, fs / 2, fs / blockSize)
+    freq = np.arange(0, fs / 2 + 1, fs / (2 * blockSize))
     f0 = freq[maxIndex]
     return f0
 
@@ -88,7 +98,7 @@ def track_pitch_hps(x, blockSize, hopSize, fs):
     spect, freq = create_spectrogram(xb, fs)
     # estimate fundamental frequency using the HPS method
     f0 = get_f0_from_Hps(spect, fs, order)
-    return f0
+    return f0, timeInSec
 
 
 # Part C - Voicing Detection
@@ -102,6 +112,7 @@ def create_voicing_mask(rmsDb, thresholdDb):
     for i in range(len(rmsDb)):
         if rmsDb[i] > thresholdDb:
             mask[i] = 1
+    return mask
 
 
 # C.3 - create a function that applies a voicing mask to the extracted f0 vector
@@ -149,57 +160,215 @@ def eval_pitchtrack_v2(estimate_in_hz, groundtruth_in_hz):
     return errCentRms, pfp, pfn
 
 
+def track_pitch(x, blockSize, hopSize, fs, method, voicingThres):
+    if method == "acf":
+        f0, t = track_pitch_acfmod(x, blockSize, hopSize, fs)
+    elif method == "hps":
+        f0, t = track_pitch_hps(x, blockSize, hopSize, fs)
+    elif method == "fft":
+        f0, t = track_pitch_fftmax(x, blockSize, hopSize, fs)
+    xb, timeInSec = block_audio(x, blockSize, hopSize, fs)
+    rms_db = extract_rms(xb)
+    mask = create_voicing_mask(rms_db, voicingThres)
+    f0_adj = apply_voicing_mask(f0, mask)
+    return f0_adj, timeInSec
+
+
+def run_evaluation(complete_path_to_data_folder, method, voicingThres=None):
+    import os
+
+    # init
+    errCentRmsAvg = 0
+    pfpAvg = 0
+    pfnAvg = 0
+    iNumOfFiles = 0
+
+    # for loop over files
+    for file in os.listdir(complete_path_to_data_folder):
+        if file.endswith(".wav"):
+            iNumOfFiles += 1
+            # read audio
+            [fs, afAudioData] = wav.read(
+                os.path.join(complete_path_to_data_folder, file)
+            )
+
+            # read ground truth (assume the file is there!)
+            refdata = np.loadtxt(
+                os.path.join(
+                    complete_path_to_data_folder,
+                    os.path.splitext(file)[0] + ".f0.Corrected.txt",
+                )
+            )
+        else:
+            continue
+
+        if method == "hps" and voicingThres == None:
+            f0, t = track_pitch_hps(afAudioData, 1024, 512, fs)
+        if method == "fft" and voicingThres == None:
+            f0, t = track_pitch_fftmax(afAudioData, 1024, 512, fs)
+        if method == "hps" and voicingThres != None:
+            f0, t = track_pitch(afAudioData, 1024, 512, fs, method, voicingThres)
+        if method == "fft" and voicingThres != None:
+            f0, t = track_pitch(afAudioData, 1024, 512, fs, method, voicingThres)
+        if method == "acf" and voicingThres != None:
+            f0, t = track_pitch(afAudioData, 1024, 512, fs, method, voicingThres)
+
+        # compute rms and accumulate
+        errCentRms, pfp, pfn = eval_pitchtrack_v2(f0, refdata[:, 2])
+        errCentRmsAvg += errCentRms
+        pfpAvg += pfp
+        pfnAvg += pfn
+
+    if iNumOfFiles == 0:
+        return -1
+
+    return errCentRmsAvg / iNumOfFiles, pfpAvg / iNumOfFiles, pfnAvg / iNumOfFiles
+
+
 ## Part E - Evaluation
 # E.1
 def executeassign3():
     # create test signal
-    fs = 44.1e3
-    t1 = np.arange(0, 1, 1 / fs)
-    t2 = np.arange(1, 2, 1 / fs)
-    t = np.append(t1, t2)
-    f1 = 441
-    f2 = 882
-    x = np.append(np.sin(2 * np.pi * f1 * t1), np.sin(2 * np.pi * f2 * t2))
-    # plot test signal
-    plt.plot(t, x)
-    plt.xlabel("Time [s]")
-    plt.ylabel("Amplitude (raw)")
-    plt.title("Test Signal")
-    plt.show(block=False)
+    # fs = 44.1e3
+    # t1 = np.arange(0, 1, 1 / fs)
+    # t2 = np.arange(1, 2, 1 / fs)
+    # t = np.append(t1, t2)
+    # f1 = 441
+    # f2 = 882
+    # x = np.append(np.sin(2 * np.pi * f1 * t1), np.sin(2 * np.pi * f2 * t2))
+    # # plot test signal
+    # plt.plot(t, x)
+    # plt.xlabel("Time [s]")
+    # plt.ylabel("Amplitude (raw)")
+    # plt.title("Test Signal")
+    # plt.show(block=False)
 
-    blockSize = 1024
-    hopSize = 512
-    f0_fft = track_pitch_fftmax(x, blockSize, hopSize, fs)
-    f0_hps = track_pitch_hps(x, blockSize, hopSize, fs)
-    xb, timeInSec = block_audio(x, blockSize, hopSize, fs)
+    # blockSize = 1024
+    # hopSize = 512
+    # f0_fft = track_pitch_fftmax(x, blockSize, hopSize, fs)
+    # f0_hps = track_pitch_hps(x, blockSize, hopSize, fs)
+    # xb, timeInSec = block_audio(x, blockSize, hopSize, fs)
 
-    # plot returns
-    plt.figure()
-    plt.plot(f0_fft)
-    plt.plot(f0_hps)
-    plt.xlabel("Time [s]")
-    plt.ylabel("Amplitude (raw)")
-    plt.title("Estimated Pitch")
-    plt.legend("FFT", "HPS")
-    plt.show()
+    # # plot returns
+    # plt.figure()
+    # plt.plot(f0_fft)
+    # plt.plot(f0_hps)
+    # plt.xlabel("Time [s]")
+    # plt.ylabel("Amplitude (raw)")
+    # plt.title("Estimated Pitch - Block 1024")
+    # plt.legend("FFT", "HPS")
+    # plt.show()
+
+    # # calculate absolute error per block
+    # annotation = np.append(
+    #     np.ones(np.ceil(len(timeInSec) / 2).astype(int)) * f1,
+    #     np.ones(np.floor(len(timeInSec) / 2).astype(int)) * f2,
+    # )
+    # err_fft = np.abs(f0_fft - annotation)
+    # err_hps = np.abs(f0_hps - annotation)
+
+    # # plot errors
+    # plt.figure()
+    # plt.plot(err_fft)
+    # plt.plot(err_hps)
+    # plt.xlabel("Time [s]")
+    # plt.ylabel("Amplitude (raw)")
+    # plt.title("Error - Block 1024")
+    # plt.legend("FFT", "HPS")
+    # plt.show()
+
+    # blockSize = 2048
+    # hopSize = 512
+    # f0_fft = track_pitch_fftmax(x, blockSize, hopSize, fs)
+    # xb, timeInSec = block_audio(x, blockSize, hopSize, fs)
+
+    # # plot returns
+    # plt.figure()
+    # plt.plot(f0_fft)
+    # plt.xlabel("Time [s]")
+    # plt.ylabel("Amplitude (raw)")
+    # plt.title("Estimated Pitch - Block 2048")
+    # plt.legend("FFT", "HPS")
+    # plt.show()
 
     # calculate absolute error per block
-    annotation = np.append(
-        np.ones(np.ceil(len(timeInSec) / 2).astype(int)) * f1,
-        np.ones(np.floor(len(timeInSec) / 2).astype(int)) * f2,
-    )
-    err_fft = np.abs(f0_fft - annotation)
-    err_hps = np.abs(f0_hps - annotation)
+    # annotation = np.append(
+    #     np.ones(np.ceil(len(timeInSec) / 2).astype(int)) * f1,
+    #     np.ones(np.floor(len(timeInSec) / 2).astype(int)) * f2,
+    # )
+    # err_fft = np.abs(f0_fft - annotation)
+    # err_hps = np.abs(f0_hps - annotation)
 
-    # plot errors
-    plt.figure()
-    plt.plot(err_fft)
-    plt.plot(err_hps)
-    plt.xlabel("Time [s]")
-    plt.ylabel("Amplitude (raw)")
-    plt.title("Error")
-    plt.legend("FFT", "HPS")
-    plt.show()
+    # # plot errors
+    # plt.figure()
+    # plt.plot(err_fft)
+    # plt.plot(err_hps)
+    # plt.xlabel("Time [s]")
+    # plt.ylabel("Amplitude (raw)")
+    # plt.title("Error - Block 2048")
+    # plt.legend("FFT", "HPS")
+    # plt.show()
+
+    complete_path_to_data_folder = "../trainData"
+    errCentRms, pfp, pfn = run_evaluation(complete_path_to_data_folder, "fft")
+    print("FFT Results")
+    print("Error Cent RMS: ", errCentRms)
+    print("False Positive Percentage: ", pfp)
+    print("False Negative Percentage: ", pfn)
+
+    errCentRms, pfp, pfn = run_evaluation(complete_path_to_data_folder, "hps")
+    print("HPS Results")
+    print("Error Cent RMS: ", errCentRms)
+    print("False Positive Percentage: ", pfp)
+    print("False Negative Percentage: ", pfn)
+
+    errCentRms, pfp, pfn = run_evaluation(
+        complete_path_to_data_folder, "fft", voicingThres=-20
+    )
+    print("FFT Results -20")
+    print("Error Cent RMS: ", errCentRms)
+    print("False Positive Percentage: ", pfp)
+    print("False Negative Percentage: ", pfn)
+
+    errCentRms, pfp, pfn = run_evaluation(
+        complete_path_to_data_folder, "fft", voicingThres=-40
+    )
+    print("FFT Results -40")
+    print("Error Cent RMS: ", errCentRms)
+    print("False Positive Percentage: ", pfp)
+    print("False Negative Percentage: ", pfn)
+
+    errCentRms, pfp, pfn = run_evaluation(
+        complete_path_to_data_folder, "hps", voicingThres=-20
+    )
+    print("HPS Results -20")
+    print("Error Cent RMS: ", errCentRms)
+    print("False Positive Percentage: ", pfp)
+    print("False Negative Percentage: ", pfn)
+
+    errCentRms, pfp, pfn = run_evaluation(
+        complete_path_to_data_folder, "hps", voicingThres=-40
+    )
+    print("HPS Results -40")
+    print("Error Cent RMS: ", errCentRms)
+    print("False Positive Percentage: ", pfp)
+    print("False Negative Percentage: ", pfn)
+
+    errCentRms, pfp, pfn = run_evaluation(
+        complete_path_to_data_folder, "acf", voicingThres=-20
+    )
+    print("ACF Results -20")
+    print("Error Cent RMS: ", errCentRms)
+    print("False Positive Percentage: ", pfp)
+    print("False Negative Percentage: ", pfn)
+
+    errCentRms, pfp, pfn = run_evaluation(
+        complete_path_to_data_folder, "acf", voicingThres=-40
+    )
+    print("ACF Results -40")
+    print("Error Cent RMS: ", errCentRms)
+    print("False Positive Percentage: ", pfp)
+    print("False Negative Percentage: ", pfn)
 
 
 if __name__ == "__main__":
