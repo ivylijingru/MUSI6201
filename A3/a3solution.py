@@ -2,23 +2,58 @@
 
 # import dependencies
 import numpy as np
-from scipy.io import wavfile as wav
+from scipy.io.wavfile import read as wavread
 import matplotlib.pyplot as plt
-import os
 
 from a1solution import convert_freq2midi, track_pitch_acfmod
 from a2solution import block_audio
 
 
 def extract_rms(xb):
-    nblocks, b_size = np.shape(xb)  # get size of input blocked signal
-    rms_dB = np.zeros(nblocks)  # spectral centroid
-    for i in range(nblocks):
-        rms_of_block = np.sqrt(np.sum(np.square(xb[i, :]) / np.size(xb[i, :])))
-        rms_dB[i] = np.maximum(
-            20 * np.log10(rms_of_block / np.power(2, 15)), -100
-        )  # Dividing by 2^15 (for 16-bit depth) to get dbFS
-    return rms_dB
+    return FeatureTimeRms(xb)
+
+
+def FeatureTimeRms(xb):
+    # number of results
+    numBlocks = xb.shape[0]
+
+    # allocate memory
+    vrms = np.zeros(numBlocks)
+
+    for n in range(0, numBlocks):
+        # calculate the rms
+        vrms[n] = np.sqrt(np.dot(xb[n, :], xb[n, :]) / xb.shape[1])
+
+    # convert to dB
+    epsilon = 1e-5  # -100dB
+
+    vrms[vrms < epsilon] = epsilon
+    vrms = 20 * np.log10(vrms)
+
+    return vrms
+
+
+def ToolReadAudio(cAudioFilePath):
+    [f_s, x] = wavread(cAudioFilePath)
+
+    if x.dtype == "float32":
+        x = x
+    else:
+        # change range to [-1,1)
+        if x.dtype == "uint8":
+            nbits = 8
+        elif x.dtype == "int16":
+            nbits = 16
+        elif x.dtype == "int32":
+            nbits = 32
+
+        x = x / float(2 ** (nbits - 1))
+
+    # special case of unsigned format
+    if x.dtype == "uint8":
+        x = x - 1.0
+
+    return f_s, x
 
 
 ## Part A
@@ -125,8 +160,7 @@ def apply_voicing_mask(f0, mask):
 # calculate how many false positive values (estimated fundamental frequencies where the mask is set to 0)
 def eval_voiced_fp(estimation, annotation):
     # calculate zero values in annotation
-    N = len(annotation)
-    zero_inds = np.where(annotation == 0)
+    zero_inds = np.where(annotation == 0)[0]
     fps = np.count_nonzero(estimation[zero_inds])
     pfp = fps / len(zero_inds)
     return pfp
@@ -135,9 +169,8 @@ def eval_voiced_fp(estimation, annotation):
 # calculate how many false negatives values (estimated fundamental frequencies where the mask is nonzero but estimate is 0)
 def eval_voiced_fn(estimation, annotation):
     # calculate zero values in annotation
-    N = len(annotation)
-    nonzero_inds = np.where(annotation != 0)
-    fns = np.size(estimation[nonzero_inds] == 0)
+    nonzero_inds = np.where(annotation != 0)[0]
+    fns = np.sum(estimation[nonzero_inds] == 0)
     pfn = fns / len(nonzero_inds)
     return pfn
 
@@ -152,7 +185,13 @@ def eval_pitchtrack_v2(estimate_in_hz, groundtruth_in_hz):
 
     p_err = estimate_pitch_midi - groundtruth_pitch_midi  # error in pitch  - MIDI
     err_cent = 100 * p_err
-    errCentRms = np.sqrt(np.sum(np.square(err_cent)) / np.size(err_cent))
+    errCentRms = np.sqrt(
+        np.mean(
+            np.square(
+                err_cent[np.logical_and(groundtruth_in_hz != 0, estimate_in_hz != 0)]
+            )
+        )
+    )
 
     pfp = eval_voiced_fp(estimate_in_hz, groundtruth_in_hz)
     pfn = eval_voiced_fn(estimate_in_hz, groundtruth_in_hz)
@@ -188,7 +227,7 @@ def run_evaluation(complete_path_to_data_folder, method, voicingThres=None):
         if file.endswith(".wav"):
             iNumOfFiles += 1
             # read audio
-            [fs, afAudioData] = wav.read(
+            [fs, afAudioData] = ToolReadAudio(
                 os.path.join(complete_path_to_data_folder, file)
             )
 
@@ -212,6 +251,12 @@ def run_evaluation(complete_path_to_data_folder, method, voicingThres=None):
             f0, t = track_pitch(afAudioData, 1024, 512, fs, method, voicingThres)
         if method == "acf" and voicingThres != None:
             f0, t = track_pitch(afAudioData, 1024, 512, fs, method, voicingThres)
+
+        plt.figure()
+        plt.plot(f0)
+        plt.plot(refdata[:, 2])
+        plt.title(method + " " + str(voicingThres))
+        plt.show()
 
         # compute rms and accumulate
         errCentRms, pfp, pfn = eval_pitchtrack_v2(f0, refdata[:, 2])
@@ -309,7 +354,7 @@ def executeassign3():
     # plt.legend("FFT", "HPS")
     # plt.show()
 
-    complete_path_to_data_folder = "../trainData"
+    complete_path_to_data_folder = "../test_"
     errCentRms, pfp, pfn = run_evaluation(complete_path_to_data_folder, "fft")
     print("FFT Results")
     print("Error Cent RMS: ", errCentRms)
