@@ -9,3 +9,12 @@ This assignment implements a Pitch Tracker using Autocorrelation Function
 The a2solution.py includes all the requsite code and generates the plots, it imports a function A1_helper_module that includes the blocking function from assignment 1
 
 Also included is the PDF with plots - Assignment2.pdf
+
+# Assignment 3 : Folder A3
+These funtions are imported from the solution files on Canvas.
+```
+from a1solution import convert_freq2midi, track_pitch_acfmod
+from a2solution import block_audio
+```
+
+Result pdf is in A3/a3solution.pdf
