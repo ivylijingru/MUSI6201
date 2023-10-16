@@ -74,7 +74,7 @@ def create_spectrogram(xb, fs):
     # compute the magnitude of the fft
     magnitude = np.abs(fft) * (2 / blockSize)
     # create a frequency vector
-    fInHz = np.arange(0, fs / 2 + 1, fs / (2 * blockSize))
+    fInHz = np.arange(0, fs / 2 + 1, fs / blockSize)
     # compute the spectrogram from the fft, rejecting the second half of the fft
     # magnitude = np.transpose(magnitude)
     Y = magnitude[:, 0 : blockSize // 2 + 1]
@@ -104,21 +104,16 @@ def track_pitch_fftmax(x, blockSize, hopSize, fs):
 # Harmonic Product Spectrum (HPS) Pitch Tracker - multiply each spectrogram block with its "harmonics" an order number of times and extract peak
 # B.1 - get f0 from Hps function
 def get_f0_from_Hps(X, fs, order):
-    P = X.copy()
-    blockSize, NumOfBlocks = np.shape(X)
+    out_dim = int((X.shape[0] - 1) / order)
+    P = X[:out_dim, :]
 
-    out_dim = int(np.shape(X)[0] / order)
-    P = P[:out_dim, :]
     # loop over all the blocks and
-    for i in range(np.shape(X)[-1]):
-        for j in range(order - 1):
-            X1 = X[np.arange(1, blockSize, j + 2), i]
-            X1 = X1[:out_dim]
-
-            P[:, i] = P[:, i] * X1
+    for j in range(order - 1):
+        X1 = X[np.arange(1, X.shape[0], j + 2), :]
+        P = P * X1[:out_dim, :]
 
     maxIndex = np.argmax(P, axis=0)
-    freq = np.arange(0, fs / 2 + 1, fs / (2 * blockSize))
+    freq = np.arange(0, fs / 2 + 1, fs / (2 * X.shape[0]))
     f0 = freq[maxIndex]
     return f0
 
@@ -252,12 +247,6 @@ def run_evaluation(complete_path_to_data_folder, method, voicingThres=None):
         if method == "acf" and voicingThres != None:
             f0, t = track_pitch(afAudioData, 1024, 512, fs, method, voicingThres)
 
-        plt.figure()
-        plt.plot(f0)
-        plt.plot(refdata[:, 2])
-        plt.title(method + " " + str(voicingThres))
-        plt.show()
-
         # compute rms and accumulate
         errCentRms, pfp, pfn = eval_pitchtrack_v2(f0, refdata[:, 2])
         errCentRmsAvg += errCentRms
@@ -274,85 +263,87 @@ def run_evaluation(complete_path_to_data_folder, method, voicingThres=None):
 # E.1
 def executeassign3():
     # create test signal
-    # fs = 44.1e3
-    # t1 = np.arange(0, 1, 1 / fs)
-    # t2 = np.arange(1, 2, 1 / fs)
-    # t = np.append(t1, t2)
-    # f1 = 441
-    # f2 = 882
-    # x = np.append(np.sin(2 * np.pi * f1 * t1), np.sin(2 * np.pi * f2 * t2))
-    # # plot test signal
-    # plt.plot(t, x)
-    # plt.xlabel("Time [s]")
-    # plt.ylabel("Amplitude (raw)")
-    # plt.title("Test Signal")
-    # plt.show(block=False)
+    fs = 44.1e3
+    t1 = np.arange(0, 1, 1 / fs)
+    t2 = np.arange(1, 2, 1 / fs)
+    t = np.append(t1, t2)
+    f1 = 441
+    f2 = 882
+    x = np.append(np.sin(2 * np.pi * f1 * t1), np.sin(2 * np.pi * f2 * t2))
+    # plot test signal
+    plt.plot(t, x)
+    plt.xlabel("Time [s]")
+    plt.ylabel("Amplitude (raw)")
+    plt.title("Test Signal")
+    plt.show(block=False)
 
-    # blockSize = 1024
-    # hopSize = 512
-    # f0_fft = track_pitch_fftmax(x, blockSize, hopSize, fs)
-    # f0_hps = track_pitch_hps(x, blockSize, hopSize, fs)
-    # xb, timeInSec = block_audio(x, blockSize, hopSize, fs)
+    blockSize = 1024
+    hopSize = 512
+    f0_fft, timeInSec = track_pitch_fftmax(x, blockSize, hopSize, fs)
+    f0_hps, timeInSec = track_pitch_hps(x, blockSize, hopSize, fs)
+    xb, timeInSec = block_audio(x, blockSize, hopSize, fs)
 
-    # # plot returns
-    # plt.figure()
-    # plt.plot(f0_fft)
-    # plt.plot(f0_hps)
-    # plt.xlabel("Time [s]")
-    # plt.ylabel("Amplitude (raw)")
-    # plt.title("Estimated Pitch - Block 1024")
-    # plt.legend("FFT", "HPS")
-    # plt.show()
-
-    # # calculate absolute error per block
-    # annotation = np.append(
-    #     np.ones(np.ceil(len(timeInSec) / 2).astype(int)) * f1,
-    #     np.ones(np.floor(len(timeInSec) / 2).astype(int)) * f2,
-    # )
-    # err_fft = np.abs(f0_fft - annotation)
-    # err_hps = np.abs(f0_hps - annotation)
-
-    # # plot errors
-    # plt.figure()
-    # plt.plot(err_fft)
-    # plt.plot(err_hps)
-    # plt.xlabel("Time [s]")
-    # plt.ylabel("Amplitude (raw)")
-    # plt.title("Error - Block 1024")
-    # plt.legend("FFT", "HPS")
-    # plt.show()
-
-    # blockSize = 2048
-    # hopSize = 512
-    # f0_fft = track_pitch_fftmax(x, blockSize, hopSize, fs)
-    # xb, timeInSec = block_audio(x, blockSize, hopSize, fs)
-
-    # # plot returns
-    # plt.figure()
-    # plt.plot(f0_fft)
-    # plt.xlabel("Time [s]")
-    # plt.ylabel("Amplitude (raw)")
-    # plt.title("Estimated Pitch - Block 2048")
-    # plt.legend("FFT", "HPS")
-    # plt.show()
+    # plot returns
+    plt.figure()
+    plt.plot(timeInSec, f0_fft, label="FFT")
+    plt.plot(timeInSec, f0_hps, label="HPS")
+    plt.xlabel("Time [s]")
+    plt.ylabel("Amplitude (raw)")
+    plt.title("Estimated Pitch - Block 1024")
+    plt.ylim(0)
+    plt.legend()
+    plt.savefig("../figures/Estimated Pitch - Block 1024.png")
 
     # calculate absolute error per block
-    # annotation = np.append(
-    #     np.ones(np.ceil(len(timeInSec) / 2).astype(int)) * f1,
-    #     np.ones(np.floor(len(timeInSec) / 2).astype(int)) * f2,
-    # )
-    # err_fft = np.abs(f0_fft - annotation)
-    # err_hps = np.abs(f0_hps - annotation)
+    annotation = np.append(
+        np.ones(np.ceil(len(timeInSec) / 2).astype(int)) * f1,
+        np.ones(np.floor(len(timeInSec) / 2).astype(int)) * f2,
+    )
+    err_fft = np.abs(f0_fft - annotation)
+    err_hps = np.abs(f0_hps - annotation)
 
-    # # plot errors
-    # plt.figure()
-    # plt.plot(err_fft)
-    # plt.plot(err_hps)
-    # plt.xlabel("Time [s]")
-    # plt.ylabel("Amplitude (raw)")
-    # plt.title("Error - Block 2048")
-    # plt.legend("FFT", "HPS")
-    # plt.show()
+    plt.figure()
+    plt.plot(timeInSec, err_fft, label="FFT")
+    plt.plot(timeInSec, err_hps, label="HPS")
+    plt.xlabel("Time [s]")
+    plt.ylabel("Amplitude (raw)")
+    plt.title("Error - Block 1024")
+    plt.ylim(0)
+    plt.legend()
+    plt.savefig("../figures/Error - Block 1024.png")
+
+    blockSize = 2048
+    hopSize = 512
+    f0_fft, timeInSec = track_pitch_fftmax(x, blockSize, hopSize, fs)
+    xb, timeInSec = block_audio(x, blockSize, hopSize, fs)
+
+    # plot returns
+    plt.figure()
+    plt.plot(timeInSec, f0_fft, label="FFT")
+    plt.xlabel("Time [s]")
+    plt.ylabel("Amplitude (raw)")
+    plt.title("Estimated Pitch - Block 2048")
+    plt.ylim(0)
+    plt.legend()
+    plt.savefig("../figures/Estimated Pitch - Block 2048.png")
+
+    # calculate absolute error per block
+    annotation = np.append(
+        np.ones(np.ceil(len(timeInSec) / 2).astype(int)) * f1,
+        np.ones(np.floor(len(timeInSec) / 2).astype(int)) * f2,
+    )
+    err_fft = np.abs(f0_fft - annotation)
+    err_hps = np.abs(f0_hps - annotation)
+
+    # plot errors
+    plt.figure()
+    plt.plot(timeInSec, err_fft, label="FFT")
+    plt.xlabel("Time [s]")
+    plt.ylabel("Amplitude (raw)")
+    plt.title("Error - Block 2048")
+    plt.ylim(0)
+    plt.legend()
+    plt.savefig("../figures/Error - Block 2048.png")
 
     complete_path_to_data_folder = "../test_"
     errCentRms, pfp, pfn = run_evaluation(complete_path_to_data_folder, "fft")
